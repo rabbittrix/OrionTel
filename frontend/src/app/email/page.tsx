@@ -1,21 +1,49 @@
 'use client';
 
-import { Mail, Inbox, Send, Archive, Trash2, Star, Search, Plus, Filter, RefreshCw } from 'lucide-react';
+import { Mail, Inbox, Send, Archive, Trash2, Star, Search, Plus, Filter, RefreshCw, X, Paperclip, Heart } from 'lucide-react';
 import { useState } from 'react';
+
+interface EmailFormData {
+  to: string;
+  subject: string;
+  content: string;
+  attachments: File[];
+}
+
+interface FilterOptions {
+  dateRange: 'all' | 'today' | 'week' | 'month';
+  read: 'all' | 'read' | 'unread';
+  hasAttachments: boolean;
+}
 
 export default function EmailPage() {
   const [selectedFolder, setSelectedFolder] = useState('inbox');
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
+  const [showComposeModal, setShowComposeModal] = useState(false);
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    dateRange: 'all',
+    read: 'all',
+    hasAttachments: false
+  });
+  const [emailForm, setEmailForm] = useState<EmailFormData>({
+    to: '',
+    subject: '',
+    content: '',
+    attachments: []
+  });
 
   const folders = [
     { id: 'inbox', name: 'Inbox', icon: Inbox, count: 12 },
     { id: 'sent', name: 'Sent', icon: Send, count: 0 },
-    { id: 'starred', name: 'Starred', icon: Star, count: 3 },
+    { id: 'favorites', name: 'Favorites', icon: Heart, count: 3 },
     { id: 'archive', name: 'Archive', icon: Archive, count: 0 },
     { id: 'trash', name: 'Trash', icon: Trash2, count: 0 },
   ];
 
-  const emails = [
+  const [emails, setEmails] = useState([
     {
       id: 1,
       from: 'John Doe',
@@ -24,7 +52,8 @@ export default function EmailPage() {
       preview: 'Hi team, I wanted to share the latest updates from our project meeting yesterday...',
       date: '10:30 AM',
       isRead: false,
-      isStarred: true,
+      isFavorite: true,
+      folder: 'inbox',
       attachments: 2,
     },
     {
@@ -35,7 +64,8 @@ export default function EmailPage() {
       preview: 'A new support ticket has been assigned to you. Please review and respond...',
       date: '9:15 AM',
       isRead: true,
-      isStarred: false,
+      isFavorite: false,
+      folder: 'inbox',
       attachments: 0,
     },
     {
@@ -46,10 +76,68 @@ export default function EmailPage() {
       preview: 'The scheduled system backup has been completed successfully...',
       date: 'Yesterday',
       isRead: true,
-      isStarred: false,
+      isFavorite: false,
+      folder: 'inbox',
       attachments: 1,
     },
-  ];
+  ]);
+
+  const handleMoveEmail = (emailId: number, targetFolder: string) => {
+    setEmails(prevEmails => 
+      prevEmails.map(email => 
+        email.id === emailId 
+          ? { ...email, folder: targetFolder }
+          : email
+      )
+    );
+  };
+
+  const handleToggleFavorite = (emailId: number) => {
+    setEmails(prevEmails =>
+      prevEmails.map(email =>
+        email.id === emailId
+          ? { ...email, isFavorite: !email.isFavorite }
+          : email
+      )
+    );
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    // Simular uma atualização dos emails
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Aqui você faria uma chamada real para atualizar os emails
+    setIsRefreshing(false);
+  };
+
+  const filteredEmails = emails.filter(email => {
+    // Filtro de pasta
+    if (selectedFolder === 'favorites' && !email.isFavorite) return false;
+    if (selectedFolder !== 'favorites' && email.folder !== selectedFolder) return false;
+
+    // Filtros adicionais
+    if (filterOptions.read !== 'all') {
+      if (filterOptions.read === 'read' && !email.isRead) return false;
+      if (filterOptions.read === 'unread' && email.isRead) return false;
+    }
+
+    if (filterOptions.hasAttachments && email.attachments === 0) return false;
+
+    if (filterOptions.dateRange !== 'all') {
+      const emailDate = new Date();
+      const today = new Date();
+      const weekAgo = new Date();
+      const monthAgo = new Date();
+      weekAgo.setDate(today.getDate() - 7);
+      monthAgo.setMonth(today.getMonth() - 1);
+
+      if (filterOptions.dateRange === 'today' && emailDate.toDateString() !== today.toDateString()) return false;
+      if (filterOptions.dateRange === 'week' && emailDate < weekAgo) return false;
+      if (filterOptions.dateRange === 'month' && emailDate < monthAgo) return false;
+    }
+
+    return true;
+  });
 
   return (
     <div className="p-6">
@@ -67,7 +155,10 @@ export default function EmailPage() {
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+          <button 
+            onClick={() => setShowComposeModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
             <Plus className="h-4 w-4" />
             <span>Compose</span>
           </button>
@@ -104,44 +195,88 @@ export default function EmailPage() {
         <div className="flex-1 flex">
           <div className={`w-96 border-r ${selectedEmail ? 'block' : 'hidden md:block'}`}>
             <div className="p-4 border-b flex items-center justify-between">
-              <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowFilterModal(true)}
+                className="flex items-center space-x-2 hover:bg-gray-100 px-3 py-2 rounded-md"
+              >
                 <Filter className="h-5 w-5 text-gray-400" />
                 <span className="text-sm font-medium">Filter</span>
-              </div>
-              <button className="p-2 hover:bg-gray-100 rounded-full">
+              </button>
+              <button 
+                onClick={handleRefresh}
+                className={`p-2 hover:bg-gray-100 rounded-full ${isRefreshing ? 'animate-spin' : ''}`}
+                disabled={isRefreshing}
+              >
                 <RefreshCw className="h-5 w-5 text-gray-400" />
               </button>
             </div>
             <div className="divide-y overflow-auto h-[calc(100vh-16rem)]">
-              {emails.map((email) => (
-                <button
+              {filteredEmails.map((email) => (
+                <div
                   key={email.id}
-                  onClick={() => setSelectedEmail(email.id)}
-                  className={`w-full p-4 text-left hover:bg-gray-50 ${
-                    selectedEmail === email.id ? 'bg-blue-50' : ''
-                  }`}
+                  className="relative group"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <span className={`font-medium ${email.isRead ? 'text-gray-700' : 'text-gray-900'}`}>
-                          {email.from}
-                        </span>
-                        {email.isStarred && <Star className="h-4 w-4 text-yellow-400 fill-current" />}
+                  <button
+                    onClick={() => setSelectedEmail(email.id)}
+                    className={`w-full p-4 text-left hover:bg-gray-50 ${
+                      selectedEmail === email.id ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <span className={`font-medium ${email.isRead ? 'text-gray-700' : 'text-gray-900'}`}>
+                            {email.from}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-500 truncate">{email.subject}</div>
+                        <div className="text-sm text-gray-500 truncate">{email.preview}</div>
                       </div>
-                      <div className="text-sm text-gray-500 truncate">{email.subject}</div>
-                      <div className="text-sm text-gray-500 truncate">{email.preview}</div>
+                      <div className="ml-4">
+                        <div className="flex items-center space-x-1">
+                          <span className="text-xs text-gray-500">{email.date}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(email.id);
+                            }}
+                            className="p-1"
+                            title={email.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                          >
+                            <Heart className={`h-4 w-4 ${email.isFavorite ? 'text-red-400 fill-current' : 'text-gray-400'}`} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveEmail(email.id, 'archive');
+                            }}
+                            className="p-1"
+                            title="Archive"
+                          >
+                            <Archive className="h-4 w-4 text-gray-400" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMoveEmail(email.id, 'trash');
+                            }}
+                            className="p-1"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4 text-gray-400" />
+                          </button>
+                        </div>
+                        {email.attachments > 0 && (
+                          <div className="mt-1 flex justify-end">
+                            <span className="px-2 py-1 text-xs bg-gray-100 rounded-full">
+                              {email.attachments} files
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="ml-4 flex flex-col items-end">
-                      <span className="text-xs text-gray-500">{email.date}</span>
-                      {email.attachments > 0 && (
-                        <span className="mt-1 px-2 py-1 text-xs bg-gray-100 rounded-full">
-                          {email.attachments} files
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -182,7 +317,19 @@ export default function EmailPage() {
                   </div>
                 </div>
                 <div className="p-4 border-t">
-                  <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                  <button 
+                    onClick={() => {
+                      const selectedEmailData = emails.find((e) => e.id === selectedEmail);
+                      setEmailForm({
+                        to: selectedEmailData?.email || '',
+                        subject: `Re: ${selectedEmailData?.subject}`,
+                        content: '',
+                        attachments: []
+                      });
+                      setShowReplyModal(true);
+                    }}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
                     <Mail className="h-4 w-4" />
                     <span>Reply</span>
                   </button>
@@ -202,6 +349,307 @@ export default function EmailPage() {
           </div>
         </div>
       </div>
+
+      {/* Compose Modal */}
+      {showComposeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">New Message</h2>
+              <button
+                onClick={() => setShowComposeModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              console.log('Sending email:', emailForm);
+              setShowComposeModal(false);
+              setEmailForm({ to: '', subject: '', content: '', attachments: [] });
+            }} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To
+                </label>
+                <input
+                  type="email"
+                  value={emailForm.to}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, to: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="recipient@example.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  value={emailForm.subject}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, subject: e.target.value }))}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Email subject"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Message
+                </label>
+                <textarea
+                  value={emailForm.content}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, content: e.target.value }))}
+                  required
+                  rows={8}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Write your message here..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Attachments
+                </label>
+                <div className="mt-1 flex items-center">
+                  <label className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 cursor-pointer">
+                    <Paperclip className="h-4 w-4" />
+                    <span>Add files</span>
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setEmailForm(prev => ({
+                          ...prev,
+                          attachments: [...prev.attachments, ...files]
+                        }));
+                      }}
+                    />
+                  </label>
+                  {emailForm.attachments.length > 0 && (
+                    <span className="ml-2 text-sm text-gray-500">
+                      {emailForm.attachments.length} file(s) selected
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowComposeModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Send
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reply Modal */}
+      {showReplyModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Reply</h2>
+              <button
+                onClick={() => setShowReplyModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              console.log('Sending reply:', emailForm);
+              setShowReplyModal(false);
+              setEmailForm({ to: '', subject: '', content: '', attachments: [] });
+            }} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  To
+                </label>
+                <input
+                  type="email"
+                  value={emailForm.to}
+                  readOnly
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Subject
+                </label>
+                <input
+                  type="text"
+                  value={emailForm.subject}
+                  readOnly
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Message
+                </label>
+                <textarea
+                  value={emailForm.content}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, content: e.target.value }))}
+                  required
+                  rows={8}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Write your reply here..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Attachments
+                </label>
+                <div className="mt-1 flex items-center">
+                  <label className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 cursor-pointer">
+                    <Paperclip className="h-4 w-4" />
+                    <span>Add files</span>
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setEmailForm(prev => ({
+                          ...prev,
+                          attachments: [...prev.attachments, ...files]
+                        }));
+                      }}
+                    />
+                  </label>
+                  {emailForm.attachments.length > 0 && (
+                    <span className="ml-2 text-sm text-gray-500">
+                      {emailForm.attachments.length} file(s) selected
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowReplyModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Send Reply
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Filter Emails</h2>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date Range
+                </label>
+                <select
+                  value={filterOptions.dateRange}
+                  onChange={(e) => setFilterOptions(prev => ({ ...prev, dateRange: e.target.value as any }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All time</option>
+                  <option value="today">Today</option>
+                  <option value="week">Last 7 days</option>
+                  <option value="month">Last 30 days</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Read Status
+                </label>
+                <select
+                  value={filterOptions.read}
+                  onChange={(e) => setFilterOptions(prev => ({ ...prev, read: e.target.value as any }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All</option>
+                  <option value="read">Read</option>
+                  <option value="unread">Unread</option>
+                </select>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="hasAttachments"
+                  checked={filterOptions.hasAttachments}
+                  onChange={(e) => setFilterOptions(prev => ({ ...prev, hasAttachments: e.target.checked }))}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label htmlFor="hasAttachments" className="ml-2 block text-sm text-gray-700">
+                  Has attachments
+                </label>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterOptions({
+                      dateRange: 'all',
+                      read: 'all',
+                      hasAttachments: false
+                    });
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFilterModal(false)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://oriontel:oriontel@db:5432/oriontel
+      - RUST_LOG=info
+    depends_on:
+      - db
+    networks:
+      - oriontel-network
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=oriontel
+      - POSTGRES_PASSWORD=oriontel
+      - POSTGRES_DB=oriontel
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - oriontel-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8080
+    depends_on:
+      - backend
+    networks:
+      - oriontel-network
+    restart: unless-stopped
+
+networks:
+  oriontel-network:
+    driver: bridge
+
+volumes:
+  postgres_data: 

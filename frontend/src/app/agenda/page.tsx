@@ -1,11 +1,50 @@
 'use client';
 
-import { Calendar as CalendarIcon, Clock, Plus, Users, MapPin, Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { Calendar as CalendarIcon, Clock, Plus, Users, MapPin, Search, ChevronLeft, ChevronRight, X, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
+interface EventFormData {
+  title: string;
+  date: string;
+  time: string;
+  duration: string;
+  type: 'meeting' | 'call' | 'task';
+  location: string;
+  attendees: string;
+  description: string;
+}
+
+interface FilterOptions {
+  startDate: Date;
+  endDate: Date;
+  type: string;
+  search: string;
+}
 
 export default function AgendaPage() {
-  const [currentDate] = useState(new Date());
-  const [view, setView] = useState<'month' | 'week'>('month');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<'month' | 'week' | 'day'>('month');
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    startDate: new Date(),
+    endDate: new Date(),
+    type: '',
+    search: ''
+  });
+  const [eventForm, setEventForm] = useState<EventFormData>({
+    title: '',
+    date: '',
+    time: '09:00',
+    duration: '1h',
+    type: 'meeting',
+    location: '',
+    attendees: '',
+    description: ''
+  });
+
   const [events] = useState([
     {
       id: 1,
@@ -39,176 +78,373 @@ export default function AgendaPage() {
     },
   ]);
 
-  const daysInMonth = Array.from({ length: 35 }, (_, i) => {
-    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), i - currentDate.getDay() + 1);
-    return {
-      date,
-      isCurrentMonth: date.getMonth() === currentDate.getMonth(),
-      events: events.filter(event => event.date === date.toISOString().split('T')[0]),
-    };
-  });
+  const firstDayOfMonth = startOfMonth(currentDate);
+  const lastDayOfMonth = endOfMonth(currentDate);
+  const daysInMonth = eachDayOfInterval({ start: firstDayOfMonth, end: lastDayOfMonth });
 
-  const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const calendarDays = daysInMonth.map(date => ({
+    date,
+    isCurrentMonth: true,
+    isToday: isToday(date)
+  }));
+
+  const weekDays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+  const handlePreviousMonth = () => setCurrentDate(subMonths(currentDate, 1));
+  const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
+  const handleToday = () => setCurrentDate(new Date());
+
+  const handleFilterChange = (name: string, value: any) => {
+    setFilterOptions(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEventForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('New event:', eventForm);
+    setShowEventModal(false);
+    setEventForm({
+      title: '',
+      date: currentDate ? currentDate.toISOString().split('T')[0] : '',
+      time: '09:00',
+      duration: '1h',
+      type: 'meeting',
+      location: '',
+      attendees: '',
+      description: ''
+    });
+  };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
-          <CalendarIcon className="h-6 w-6 text-blue-600" />
-          <h1 className="text-2xl font-semibold">Calendar</h1>
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search events..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
-            <Plus className="h-4 w-4" />
-            <span>New Event</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b flex items-center justify-between">
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <ChevronLeft className="h-5 w-5 text-gray-600" />
-            </button>
-            <h2 className="text-lg font-semibold">
-              {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-            </h2>
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <ChevronRight className="h-5 w-5 text-gray-600" />
-            </button>
+            <CalendarIcon className="h-8 w-8 text-blue-600" />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Agenda</h1>
+              <p className="text-sm text-gray-500">
+                {format(currentDate, 'MMMM yyyy', { locale: ptBR })}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setView('month')}
-              className={`px-4 py-2 rounded-md ${
-                view === 'month' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Month
-            </button>
-            <button
-              onClick={() => setView('week')}
-              className={`px-4 py-2 rounded-md ${
-                view === 'week' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Week
-            </button>
+          
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handlePreviousMonth}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <ChevronLeft className="h-5 w-5 text-gray-600" />
+              </button>
+              <button
+                onClick={handleToday}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md"
+              >
+                Hoje
+              </button>
+              <button
+                onClick={handleNextMonth}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <ChevronRight className="h-5 w-5 text-gray-600" />
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <div className="relative">
+                <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar eventos..."
+                  value={filterOptions.search}
+                  onChange={(e) => handleFilterChange('search', e.target.value)}
+                  className="pl-10 pr-4 py-2 w-64 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <button
+                onClick={() => setShowFilterModal(true)}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-full"
+              >
+                <Filter className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setShowEventModal(true)}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Novo Evento</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {view === 'month' ? (
-          <div className="grid grid-cols-7 gap-px bg-gray-200">
+        <div className="bg-white rounded-lg shadow">
+          <div className="grid grid-cols-7 gap-[1px] bg-yellow-100">
             {weekDays.map((day) => (
-              <div key={day} className="bg-gray-50 p-2 text-sm font-medium text-gray-700 text-center">
-                {day.slice(0, 3)}
-              </div>
-            ))}
-            {daysInMonth.map(({ date, isCurrentMonth, events }, index) => (
-              <div
-                key={index}
-                className={`min-h-[120px] p-2 ${
-                  isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-                }`}
-              >
-                <div className={`text-sm ${isCurrentMonth ? 'text-gray-900' : 'text-gray-400'}`}>
-                  {date.getDate()}
-                </div>
-                <div className="mt-1 space-y-1">
-                  {events.map((event) => (
-                    <div
-                      key={event.id}
-                      className="px-2 py-1 text-xs rounded-md bg-blue-50 text-blue-700 truncate"
-                    >
-                      {event.time} - {event.title}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-8 gap-px bg-gray-200">
-            <div className="bg-gray-50" />
-            {weekDays.map((day) => (
-              <div key={day} className="bg-gray-50 p-2 text-sm font-medium text-gray-700 text-center">
+              <div key={day} className="bg-white py-4 text-center text-sm font-medium text-gray-500">
                 {day}
               </div>
             ))}
-            {hours.map((hour) => (
-              <>
-                <div key={hour} className="bg-white p-2 text-sm text-gray-500">
-                  {hour.toString().padStart(2, '0')}:00
-                </div>
-                {weekDays.map((_, dayIndex) => (
-                  <div key={`${hour}-${dayIndex}`} className="bg-white border-t border-l relative">
-                    {events
-                      .filter(
-                        (event) =>
-                          new Date(event.date).getDay() === dayIndex &&
-                          parseInt(event.time.split(':')[0]) === hour
-                      )
-                      .map((event) => (
-                        <div
-                          key={event.id}
-                          className="absolute left-0 right-0 m-1 p-2 text-xs bg-blue-50 text-blue-700 rounded-md"
-                        >
-                          <div className="font-medium">{event.title}</div>
-                          <div className="flex items-center text-blue-500">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {event.time}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                ))}
-              </>
+          </div>
+          
+          <div className="grid grid-cols-7 gap-[1px] bg-yellow-100">
+            {calendarDays.map(({ date, isToday }, index) => (
+              <div
+                key={index}
+                className={`min-h-[120px] bg-white p-2 ${
+                  isToday ? 'bg-blue-50' : ''
+                }`}
+              >
+                <span className={`text-sm font-medium ${
+                  isToday ? 'text-blue-600' : 'text-gray-700'
+                }`}>
+                  {format(date, 'd')}
+                </span>
+              </div>
             ))}
           </div>
-        )}
+        </div>
       </div>
 
-      <div className="mt-6 bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold mb-4">Upcoming Events</h2>
-        <div className="space-y-4">
-          {events.map((event) => (
-            <div key={event.id} className="flex items-start space-x-4 p-4 bg-gray-50 rounded-lg">
-              <div className="flex-1">
-                <h3 className="font-medium">{event.title}</h3>
-                <div className="mt-1 space-y-1">
-                  <div className="flex items-center text-sm text-gray-500">
-                    <Clock className="h-4 w-4 mr-2" />
-                    {event.date} at {event.time} ({event.duration})
+      {/* Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Filtrar Eventos</h2>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Período
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-500">Início</label>
+                    <input
+                      type="date"
+                      value={format(filterOptions.startDate, 'yyyy-MM-dd')}
+                      onChange={(e) => handleFilterChange('startDate', new Date(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
-                  <div className="flex items-center text-sm text-gray-500">
-                    <MapPin className="h-4 w-4 mr-2" />
-                    {event.location}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-500">
-                    <Users className="h-4 w-4 mr-2" />
-                    {event.attendees.join(', ')}
+                  <div>
+                    <label className="block text-xs text-gray-500">Fim</label>
+                    <input
+                      type="date"
+                      value={format(filterOptions.endDate, 'yyyy-MM-dd')}
+                      onChange={(e) => handleFilterChange('endDate', new Date(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 </div>
               </div>
-              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                event.type === 'meeting' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-              }`}>
-                {event.type}
-              </span>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Evento
+                </label>
+                <select
+                  value={filterOptions.type}
+                  onChange={(e) => handleFilterChange('type', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">Todos</option>
+                  <option value="meeting">Reunião</option>
+                  <option value="call">Chamada</option>
+                  <option value="task">Tarefa</option>
+                </select>
+              </div>
             </div>
-          ))}
+            <div className="flex justify-end space-x-3 p-4 border-t">
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Aplicar Filtros
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Event Modal */}
+      {showEventModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-lg font-semibold">Novo Evento</h2>
+              <button
+                onClick={() => setShowEventModal(false)}
+                className="p-1 hover:bg-gray-100 rounded-full"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Título
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={eventForm.title}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Título do evento"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Data
+                  </label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={eventForm.date}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Horário
+                  </label>
+                  <input
+                    type="time"
+                    name="time"
+                    value={eventForm.time}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Duração
+                  </label>
+                  <select
+                    name="duration"
+                    value={eventForm.duration}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="30m">30 minutos</option>
+                    <option value="1h">1 hora</option>
+                    <option value="1h30m">1 hora e 30 minutos</option>
+                    <option value="2h">2 horas</option>
+                    <option value="3h">3 horas</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo
+                  </label>
+                  <select
+                    name="type"
+                    value={eventForm.type}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="meeting">Reunião</option>
+                    <option value="call">Chamada</option>
+                    <option value="task">Tarefa</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Local
+                </label>
+                <input
+                  type="text"
+                  name="location"
+                  value={eventForm.location}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Local ou link da reunião"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Participantes
+                </label>
+                <input
+                  type="text"
+                  name="attendees"
+                  value={eventForm.attendees}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Email dos participantes (separados por vírgula)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  name="description"
+                  value={eventForm.description}
+                  onChange={handleInputChange}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Descrição do evento"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEventModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Criar Evento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

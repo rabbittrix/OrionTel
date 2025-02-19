@@ -86,6 +86,41 @@ src/
 └── utils/
 ```
 
+1.2. Project Structure Backend:
+
+├── backend/
+│   ├── src/                  # Core application code written in Rust/C
+│   ├── models/               # AI/ML models and related scripts
+│   ├── config/               # Configuration files
+│   └── tests/                # Unit and integration tests
+├── docker/
+│   ├── Dockerfile            # Instructions for building the container image
+│   └── docker-compose.yml    # Multi-container orchestration file
+├── docs/                     # Documentation for users and developers
+├── scripts/                  # Helper scripts for setup and maintenance
+└── README.md                 # Project overview and installation guide
+
+  # Development Roadmap
+      Phase 1: Planning & Research
+      Define project scope and requirements.
+      Conduct feasibility studies for satellite integration and AI/ML implementation.
+      Phase 2: Core Development
+      Develop the backend in Rust/C.
+      Implement basic telephony functionalities (call routing, voicemail, etc.).
+      Phase 3: Frontend Development
+      Build the web interface using Next.js.
+      Design intuitive dashboards for administrators and end-users.
+      Phase 4: Advanced Features
+      Integrate AI/ML models for security and automation.
+      Add support for satellite communication.
+      Phase 5: Testing & Optimization
+      Perform unit testing, integration testing, and stress testing.
+      Optimize performance for resource-constrained environments.
+      Phase 6: Deployment
+      Package the application as a Docker image.
+      Provide clear documentation for installation and usage.
+
+
 
 2. Key Features:
 - Real-time system resource monitoring
